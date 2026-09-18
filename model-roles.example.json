@@ -1,0 +1,65 @@
+{
+  "roles": {
+    "default": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "smol": {
+      "model": "anthropic/claude-haiku-4-5",
+      "fallback": ["openai/gpt-4.1-mini"]
+    },
+    "slow": {
+      "model": "anthropic/claude-opus-4-5",
+      "thinking": "high",
+      "fallback": ["openai/gpt-5.2:high", "@default"]
+    },
+    "vision": {
+      "model": "google/gemini-2.5-pro",
+      "fallback": ["@default"]
+    },
+    "plan": {
+      "model": "openai/gpt-5.2",
+      "thinking": "high",
+      "fallback": ["@slow"]
+    },
+    "designer": {
+      "model": "@slow"
+    },
+    "commit": {
+      "model": "@smol",
+      "thinking": "low"
+    },
+    "tiny": {
+      "model": "@smol",
+      "thinking": "off"
+    },
+    "task": {
+      "model": "anthropic/claude-sonnet-4-5",
+      "fallback": ["@default"]
+    },
+    "advisor": {
+      "model": "anthropic/claude-opus-4-5",
+      "thinking": "medium",
+      "fallback": ["openai/gpt-5.2"]
+    },
+    "reviewer": {
+      "description": "Custom role: strict code review",
+      "model": "@slow"
+    }
+  },
+  "agentRoles": {
+    "scout": "smol",
+    "researcher": "smol",
+    "worker": "task",
+    "Explore": "smol",
+    "Plan": "plan"
+  },
+  "advisor": {
+    "enabled": false,
+    "everyTurns": 1,
+    "mode": "advise",
+    "minSeverity": "concern",
+    "maxNotes": 3
+  },
+  "injectPrompt": true,
+  "compactionRole": null
+}

@@ -1,0 +1,42 @@
+{
+  "name": "pi-model-roles",
+  "version": "0.1.0",
+  "description": "Assign models to roles instead of to individual agents in the pi coding agent — TUI, fallback chains, role-aware subagent spawns, and an advisor that routes work",
+  "keywords": [
+    "pi",
+    "pi-package",
+    "pi-extension",
+    "pi-agent",
+    "coding-agent",
+    "model-routing",
+    "subagents"
+  ],
+  "license": "MIT",
+  "author": "thucpru",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thucpru/pi-model-roles.git"
+  },
+  "homepage": "https://github.com/thucpru/pi-model-roles#readme",
+  "bugs": {
+    "url": "https://github.com/thucpru/pi-model-roles/issues"
+  },
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.85.0"
+  },
+  "files": [
+    "*.ts",
+    "model-roles.example.json",
+    "README.md",
+    "LICENSE"
+  ]
+}
