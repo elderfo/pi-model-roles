@@ -44,6 +44,50 @@ export function currentSavePath(cwd: string): string {
 	return saveScope === "global" ? globalConfigPath() : projectConfigPath(cwd);
 }
 
+export function saveScopeLabel(): string {
+	return saveScope;
+}
+
+export function toggleSaveScope(): void {
+	saveScope = saveScope === "global" ? "project" : "global";
+}
+
+/**
+ * Ask for a new custom role name, reject duplicates, return the created name.
+ * Shared by the menu tree and the board.
+ */
+export async function promptNewRole(deps: UiDeps): Promise<string | undefined> {
+	const config = deps.getConfig();
+	const raw = await deps.ui.input("New role name", "e.g. reviewer, translator");
+	const name = raw?.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+	if (!name) return undefined;
+	if (config.roles[name]) {
+		deps.ui.notify(`@${name} already exists.`, "warning");
+		return undefined;
+	}
+	const description = (await deps.ui.input("What is it for?", "short description"))?.trim();
+	config.roles[name] = description ? { description } : {};
+	deps.commit();
+	return name;
+}
+
+/** Confirm and delete a custom role, unmapping any agent that pointed at it. */
+export async function confirmDeleteRole(deps: UiDeps, name: string): Promise<boolean> {
+	const config = deps.getConfig();
+	if (name in BUILT_IN_ROLES) {
+		deps.ui.notify(`@${name} is built in and cannot be deleted.`, "warning");
+		return false;
+	}
+	const ok = await deps.ui.confirm(`Delete @${name}?`, "Custom role. Anything pointing at it falls back to @default.");
+	if (!ok) return false;
+	delete config.roles[name];
+	for (const [agent, mapped] of Object.entries(config.agentRoles)) {
+		if (mapped === name) delete config.agentRoles[agent];
+	}
+	deps.commit();
+	return true;
+}
+
 function pad(text: string, width: number): string {
 	return text.length >= width ? text : text + " ".repeat(width - text.length);
 }
@@ -109,7 +153,7 @@ async function pickThinking(deps: UiDeps, current?: ThinkingLevel): Promise<Thin
 	return picked.replace("  ←", "").trim() as ThinkingLevel;
 }
 
-async function editRole(deps: UiDeps, name: string): Promise<void> {
+export async function editRole(deps: UiDeps, name: string): Promise<void> {
 	for (;;) {
 		const config = deps.getConfig();
 		const role = (config.roles[name] ??= {});
@@ -206,7 +250,7 @@ async function editRole(deps: UiDeps, name: string): Promise<void> {
 	}
 }
 
-async function editAgentMap(deps: UiDeps): Promise<void> {
+export async function editAgentMap(deps: UiDeps): Promise<void> {
 	for (;;) {
 		const config = deps.getConfig();
 		const discovered = readAgentRoster(deps.cwd);
@@ -241,7 +285,7 @@ async function editAgentMap(deps: UiDeps): Promise<void> {
 	}
 }
 
-async function editAdvisor(deps: UiDeps): Promise<void> {
+export async function editAdvisor(deps: UiDeps): Promise<void> {
 	for (;;) {
 		const config = deps.getConfig();
 		const advisor = config.advisor;
@@ -355,17 +399,8 @@ export async function openRolesUi(deps: UiDeps): Promise<void> {
 		if (!picked || picked === CLOSE) return;
 
 		if (picked === CREATE) {
-			const raw = await deps.ui.input("New role name", "e.g. reviewer, translator");
-			const name = raw?.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
-			if (!name) continue;
-			if (config.roles[name]) {
-				deps.ui.notify(`@${name} already exists.`, "warning");
-				continue;
-			}
-			const description = (await deps.ui.input("What is it for?", "short description"))?.trim();
-			config.roles[name] = description ? { description } : {};
-			deps.commit();
-			await editRole(deps, name);
+			const name = await promptNewRole(deps);
+			if (name) await editRole(deps, name);
 			continue;
 		}
 		if (picked === AGENTS) {
@@ -377,7 +412,7 @@ export async function openRolesUi(deps: UiDeps): Promise<void> {
 			continue;
 		}
 		if (picked === SCOPE) {
-			saveScope = saveScope === "global" ? "project" : "global";
+			toggleSaveScope();
 			saveConfig(currentSavePath(deps.cwd), config);
 			deps.ui.notify(`Saving to ${saveScope}: ${currentSavePath(deps.cwd)}`, "info");
 			continue;

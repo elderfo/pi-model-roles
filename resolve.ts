@@ -11,6 +11,9 @@ export interface AnyModel {
 	reasoning: boolean;
 	input: string[];
 	contextWindow: number;
+	/** Price per million tokens, when the catalog knows it. */
+	cost?: { input: number; output: number };
+	maxTokens?: number;
 }
 
 export interface ModelSource {

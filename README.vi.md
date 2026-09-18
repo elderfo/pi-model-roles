@@ -145,7 +145,7 @@ File project merge đè lên global **theo từng role** và **từng ánh xạ 
 một project có thể chỉ đè `@slow` và thừa hưởng phần còn lại. File project chỉ
 được đọc khi project đã được pi trust.
 
-TUI ghi vào phạm vi đang hiện ở dòng `💾 Save to:`; bấm vào đó để đổi.
+TUI ghi vào phạm vi đang hiện ở footer; phím `s` đổi qua lại.
 
 Config hỏng thì bị bỏ qua chứ không làm pi chết: pi vẫn khởi động, các role đọc
 ra là chưa gán.
@@ -237,61 +237,82 @@ nên `@plan` ở trên chạy model của `@slow` với `medium`, còn bản th�
 
 ## TUI `/roles`
 
-```
-Model roles   ● primary  ◐ fallback in use  ✗ broken  ○ unset
+`/roles` mở một bảng hai khung: role của bạn ở trái, danh mục model đang dùng
+được ở phải.
 
-● default    anthropic/claude-sonnet-4-5
-◐ smol       openai/gpt-4.1-mini (fallback #1)   [+1 fallback]
-● slow       anthropic/claude-opus-4-5:high
-✗ vision     unresolved
-○ commit     — not set —
-● designer   openai/gpt-5.2:high via @slow
-＋ Create a custom role…
-⇄ Agent → role mapping…
-⚙ Advisor  (off)…
-💾 Save to: global  (~/.pi/agent/model-roles.json)
-📝 Role cheat-sheet in system prompt: on
-🗜 Compaction summariser: pi default
-✕ Close
 ```
+  Model roles   one table the whole session reads from
+
+  ROLES                                │ MODELS 12  type to filter
+  ▸ ● @default  claude-sonnet-4-5      │ ▸ ● claude-sonnet-4-5      anthropic · 200K ctx · vision · $3/$15
+    ◐ @smol     gpt-4.1-mini ↓1 +1     │     claude-haiku-4-5       anthropic · 200K ctx · vision · $1/$5
+    ● @slow     claude-opus-4-5:high   │     claude-opus-4-5        anthropic · 200K ctx · reasoning
+    ✗ @vision   — not set —            │     gpt-5.2                openai · 272K ctx · vision · $1.25/$10
+    ● @designer claude-opus-4-5:high   │     gpt-4.1-mini           openai · 1M ctx · $0.4/$1.6
+    ○ @commit   — not set —            │
+
+  @default  Main session / primary work
+  chain   anthropic/claude-sonnet-4-5
+  resolves anthropic/claude-sonnet-4-5   thinking inherit
+
+  ↑↓ move · tab → models · enter use in session · t thinking · x clear model …
+  s scope:global · i prompt:on · c compact:off · v advisor:off · n new · d delete …
+```
+
+**Đổi model của một role tốn bốn thao tác**: chọn role, `tab`, gõ vài chữ,
+`enter`. Danh mục luôn hiện trên màn hình nên bạn không phải nhớ tài khoản mình
+chạy được model nào — và nó hiện luôn giá, có vision hay reasoning không, ngay
+lúc bạn đang chọn.
+
+**Dấu trong danh mục** cho biết role đang chọn dùng model đó thế nào: `●` là
+model chính, `①②③` là fallback theo thứ tự. Dấu này bám theo selector fuzzy và
+`@alias`, nên role cấu hình là `haiku` vẫn đánh dấu đúng model nó resolve ra.
+
+**Khung MODELS**
+
+| Phím | Tác dụng |
+| --- | --- |
+| gõ chữ | lọc fuzzy danh mục (theo `prov/id` và tên, token cách nhau bằng dấu cách hoặc `/`) |
+| `backspace` / `ctrl+u` | sửa / xoá bộ lọc |
+| `enter` | đặt model đang chọn làm **model chính** của role |
+| `ctrl+f` | thêm nó vào **chuỗi fallback** của role |
+| `tab` / `←` | quay lại khung ROLES |
+
+**Khung ROLES**
+
+| Phím | Tác dụng |
+| --- | --- |
+| `enter` | chuyển phiên hiện tại sang model của role này |
+| `t` | xoay vòng mức thinking, hết vòng quay về inherit |
+| `x` | xoá model chính, giữ nguyên fallback |
+| `-` | bỏ fallback cuối |
+| `p` | đưa fallback #1 lên làm chính, model chính cũ xuống fallback |
+| `n` / `d` | tạo role tự tạo / xoá role tự tạo đang chọn |
+| `a` / `v` | ánh xạ agent → role / cấu hình advisor |
+| `s` / `i` / `c` | phạm vi lưu / cheat-sheet trong prompt / role cho compaction |
+| `?` / `esc` | bảng phím / đóng |
 
 **Ký hiệu trạng thái**
 
 | Ký hiệu | Nghĩa |
 | --- | --- |
 | `●` | model chính resolve được |
-| `◐` | model chính hỏng, fallback đang gánh |
+| `◐` | model chính hỏng, fallback đang gánh (`↓1` cho biết fallback thứ mấy) |
 | `✗` | cả chuỗi không resolve được — role đang mượn `@default` |
 | `○` | chưa cấu hình gì |
 
-**Menu của từng role**
+`+2` sau tên role nghĩa là role đó có hai fallback.
 
-| Hành động | Ghi chú |
-| --- | --- |
-| Set primary model | mở bộ chọn model |
-| Set thinking level | hoặc `(inherit — let pi decide)` |
-| Add fallback model | thêm vào cuối chuỗi |
-| Remove a fallback | chỉ hiện khi role có fallback |
-| Promote a fallback to first | đưa lên làm primary; primary cũ thành fallback #1 |
-| Clear primary model | giữ nguyên fallback |
-| Use this role in the current session | giống `/role <tên>` |
-| Delete this role | chỉ role tự tạo; đồng thời gỡ mọi agent đang trỏ tới nó |
+Mọi thay đổi được ghi xuống đĩa ngay, không có bước lưu. Những hộp thoại cần gõ
+chữ — đặt tên role mới, xác nhận xoá, ánh xạ agent, cấu hình advisor — sẽ đóng
+bảng, chạy, rồi trả bạn về đúng chỗ cũ.
 
-**Bộ chọn model** hỏi chuỗi lọc trước (để trống = liệt kê tất cả), rồi chỉ hiện
-model tài khoản bạn dùng được, gắn tag `[reasoning]` và `[vision]`. Mục
-`✎ Type a selector or @alias manually…` nhận những thứ bộ chọn không biểu diễn
-được — pattern fuzzy, `@alias`, model chưa có trong catalog.
+**Terminal hẹp.** Dưới 80 cột, bảng hiện một khung tại một thời điểm và `tab`
+đổi qua lại; mọi thứ khác không đổi.
 
-**Agent → role mapping** liệt kê mọi định nghĩa subagent tìm được — từ
-`~/.pi/agent/agents/`, `<cwd>/.pi/agents/`, và thư mục `agents/` bên trong các
-pi package đã cài — cộng với mọi agent đã có tên trong config. Gán role cho
-từng cái, gỡ gán để rơi về `@task`, hoặc thêm tên bằng tay.
-
-**Advisor** là menu con cho công tắc chính, model advisor, mode, chu kỳ review,
-mức nghiêm trọng tối thiểu và giới hạn note. Xem [Advisor](#advisor).
-
-TUI dựng trên `ctx.ui.select` / `input` / `confirm` nên chạy được cả trong TUI
-tương tác lẫn chế độ RPC.
+**Chế độ không tương tác.** Trong RPC, JSON và print mode không có terminal để
+vẽ, nên `/roles` rơi về cây menu dựng trên `ctx.ui.select` / `input` / `confirm`
+với đầy đủ chức năng tương đương.
 
 ## Lệnh
 
@@ -456,7 +477,8 @@ chèn kết quả advisor.
 | `config.ts` | vị trí file, merge, ghi atomic |
 | `resolve.ts` | resolve role → model: alias, fallback, matching, health |
 | `agents.ts` | quét định nghĩa subagent ở thư mục user/project/package |
-| `ui.ts` | cây menu `/roles` |
+| `board.ts` | bảng hai khung của `/roles` (chỉ import pi-tui nên test headless được) |
+| `ui.ts` | cây menu dự phòng và các hộp thoại bảng giao lại |
 | `advisor.ts` | prompt advisor, parse JSON, render verdict |
 | `index.ts` | hook, lệnh, và phần nối chúng lại |
 
@@ -505,12 +527,15 @@ resolve được, chưa đủ `everyTurns`, hoặc verdict dưới `minSeverity`
 ```bash
 git clone https://github.com/thucpru/pi-model-roles
 cd pi-model-roles
+npm install       # kéo @earendil-works/pi-tui, thứ mà test của bảng cần
 npm test          # node --test --experimental-strip-types test/*.test.ts
 pi -e .           # chạy phiên pi với bản checkout này
 ```
 
-Cần Node 22+ để chạy TypeScript trực tiếp trong test. `resolve.ts` và `types.ts`
-cố tình không import pi để logic resolve test được mà không cần runtime của pi.
+Cần Node 22+ để chạy TypeScript trực tiếp trong test. `types.ts` và `resolve.ts`
+không import gì từ pi, còn `board.ts` chỉ import `pi-tui`, nên phần resolve và
+toàn bộ bảng — phím, thay đổi config, và bất biến "không dòng nào vượt quá bề
+rộng terminal" — đều test được mà không cần runtime của pi.
 
 Không có bước build — pi nạp TypeScript qua
 [jiti](https://github.com/unjs/jiti).

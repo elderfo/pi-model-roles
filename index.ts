@@ -16,11 +16,22 @@
 
 import { uuidv7 } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
 import { type RolesFile, loadConfig, saveConfig } from "./config.ts";
 import { type ModelSource, resolveRole, selectorFor } from "./resolve.ts";
 import { renderVerdict, runAdvisorReview, shouldInject } from "./advisor.ts";
-import { currentSavePath, openRolesUi } from "./ui.ts";
+import { type BoardResult, RoleBoard } from "./board.ts";
+import {
+	type UiDeps,
+	confirmDeleteRole,
+	currentSavePath,
+	editAdvisor,
+	editAgentMap,
+	openRolesUi,
+	promptNewRole,
+	saveScopeLabel,
+	toggleSaveScope,
+} from "./ui.ts";
 
 /** Tool names that spawn a child agent, across the subagent extensions in use. */
 const SPAWN_TOOLS = new Set(["subagent", "agent", "subagent_delegate", "subagent_run", "task"]);
@@ -96,17 +107,51 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("roles", {
-		description: "Configure which model each role uses (TUI)",
+		description: "Configure which model each role uses",
 		handler: async (_args, ctx) => {
 			const cfg = ensure(ctx);
-			await openRolesUi({
+			const deps: UiDeps = {
 				ui: ctx.ui,
 				cwd: ctx.cwd,
 				source: sourceFor(ctx),
 				getConfig: () => cfg,
 				commit: () => saveConfig(currentSavePath(ctx.cwd), cfg),
 				applyRole: (name) => applyRole(name, ctx),
-			});
+			};
+
+			// The board needs a real terminal; other modes get the menu tree.
+			if (ctx.mode !== "tui") {
+				await openRolesUi(deps);
+				statusLine(ctx);
+				return;
+			}
+
+			// The board closes whenever it needs a dialog it cannot host itself,
+			// the caller runs that dialog, then the board reopens where it was.
+			for (;;) {
+				const result = await ctx.ui.custom<BoardResult>((tui, theme, _keybindings, done) => {
+					const board = new RoleBoard(tui as any, theme as any, {
+						source: sourceFor(ctx),
+						getConfig: () => cfg,
+						commit: () => saveConfig(currentSavePath(ctx.cwd), cfg),
+						scopeLabel: saveScopeLabel,
+						toggleScope: toggleSaveScope,
+					}, done);
+					const border = new DynamicBorder((str: string) => theme.fg("accent", str));
+					return {
+						render: (width: number) => [...border.render(width), ...board.render(width), ...border.render(width)],
+						invalidate: () => board.invalidate(),
+						handleInput: (data: string) => board.handleInput(data),
+					};
+				});
+
+				if (!result || result.kind === "close") break;
+				if (result.kind === "applyRole") ctx.ui.notify(await applyRole(result.role, ctx), "info");
+				else if (result.kind === "newRole") await promptNewRole(deps);
+				else if (result.kind === "deleteRole") await confirmDeleteRole(deps, result.role);
+				else if (result.kind === "agents") await editAgentMap(deps);
+				else if (result.kind === "advisor") await editAdvisor(deps);
+			}
 			statusLine(ctx);
 		},
 	});

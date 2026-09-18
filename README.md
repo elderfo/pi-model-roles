@@ -152,8 +152,7 @@ The project file is merged on top of the global one **per role** and **per agent
 mapping** — a project can override `@slow` alone and inherit everything else. A
 project file is only read once the project is trusted by pi.
 
-The TUI writes to whichever scope `💾 Save to:` shows; toggle it from the main
-menu.
+The TUI writes to whichever scope the footer shows; `s` toggles it.
 
 A malformed config is ignored rather than fatal: pi still starts, and roles read
 as unset.
@@ -247,61 +246,82 @@ itself stays at `high`. Cycles are detected and terminate instead of recursing.
 
 ## The `/roles` TUI
 
-```
-Model roles   ● primary  ◐ fallback in use  ✗ broken  ○ unset
+`/roles` opens a two-pane board: your roles on the left, the live model catalog
+on the right.
 
-● default    anthropic/claude-sonnet-4-5
-◐ smol       openai/gpt-4.1-mini (fallback #1)   [+1 fallback]
-● slow       anthropic/claude-opus-4-5:high
-✗ vision     unresolved
-○ commit     — not set —
-● designer   openai/gpt-5.2:high via @slow
-＋ Create a custom role…
-⇄ Agent → role mapping…
-⚙ Advisor  (off)…
-💾 Save to: global  (~/.pi/agent/model-roles.json)
-📝 Role cheat-sheet in system prompt: on
-🗜 Compaction summariser: pi default
-✕ Close
 ```
+  Model roles   one table the whole session reads from
+
+  ROLES                                │ MODELS 12  type to filter
+  ▸ ● @default  claude-sonnet-4-5      │ ▸ ● claude-sonnet-4-5      anthropic · 200K ctx · vision · $3/$15
+    ◐ @smol     gpt-4.1-mini ↓1 +1     │     claude-haiku-4-5       anthropic · 200K ctx · vision · $1/$5
+    ● @slow     claude-opus-4-5:high   │     claude-opus-4-5        anthropic · 200K ctx · reasoning
+    ✗ @vision   — not set —            │     gpt-5.2                openai · 272K ctx · vision · $1.25/$10
+    ● @designer claude-opus-4-5:high   │     gpt-4.1-mini           openai · 1M ctx · $0.4/$1.6
+    ○ @commit   — not set —            │
+
+  @default  Main session / primary work
+  chain   anthropic/claude-sonnet-4-5
+  resolves anthropic/claude-sonnet-4-5   thinking inherit
+
+  ↑↓ move · tab → models · enter use in session · t thinking · x clear model …
+  s scope:global · i prompt:on · c compact:off · v advisor:off · n new · d delete …
+```
+
+**Changing a role's model takes four keystrokes**: highlight the role, `tab`,
+type a few letters, `enter`. The catalog is always on screen, so you never have
+to remember what your account can run — and it shows what each model costs and
+whether it does vision or reasoning while you choose.
+
+**Marks in the catalog** show how the highlighted role uses each model: `●` is
+its primary, `①②③` are its fallbacks in order. They follow fuzzy selectors and
+`@aliases`, so a role configured as `haiku` still marks the model it resolves to.
+
+**Models pane**
+
+| Key | Action |
+| --- | --- |
+| type | fuzzy-filter the catalog (`prov/id` and name, space- or slash-separated tokens) |
+| `backspace` / `ctrl+u` | edit / clear the filter |
+| `enter` | make the highlighted model the role's **primary** |
+| `ctrl+f` | append it to the role's **fallback chain** |
+| `tab` / `←` | back to the roles pane |
+
+**Roles pane**
+
+| Key | Action |
+| --- | --- |
+| `enter` | switch the current session to this role's model |
+| `t` | cycle the thinking level, wrapping back to inherit |
+| `x` | clear the primary, keeping the fallbacks |
+| `-` | drop the last fallback |
+| `p` | promote fallback #1 to primary, demoting the old primary |
+| `n` / `d` | create a custom role / delete the selected custom role |
+| `a` / `v` | agent → role mapping / advisor settings |
+| `s` / `i` / `c` | save scope / cheat-sheet in prompt / compaction role |
+| `?` / `esc` | key help / close |
 
 **Status markers**
 
 | Marker | Meaning |
 | --- | --- |
 | `●` | the primary model resolved |
-| `◐` | the primary failed; a fallback is carrying the role |
+| `◐` | the primary failed; a fallback is carrying the role (`↓1` says which) |
 | `✗` | nothing in the chain resolves — the role silently borrows `@default` |
 | `○` | nothing configured |
 
-**Role menu** — select any role to get:
+`+2` after a role means it has two fallbacks configured.
 
-| Action | Notes |
-| --- | --- |
-| Set primary model | opens the model picker |
-| Set thinking level | or `(inherit — let pi decide)` |
-| Add fallback model | appended to the end of the chain |
-| Remove a fallback | only shown when the role has one |
-| Promote a fallback to first | makes it the primary; the old primary becomes fallback #1 |
-| Clear primary model | keeps the fallbacks |
-| Use this role in the current session | same as `/role <name>` |
-| Delete this role | custom roles only; also unmaps any agent pointing at it |
+Every edit is written to disk immediately; there is no save step. Dialogs that
+need a text prompt — naming a new role, confirming a delete, the agent map and
+the advisor settings — close the board, run, and drop you back where you were.
 
-**Model picker** asks for a filter string first (empty lists everything), then
-shows only models your account can use, tagged `[reasoning]` and `[vision]`.
-`✎ Type a selector or @alias manually…` accepts anything the picker cannot
-express — fuzzy patterns, `@aliases`, models not yet in the catalog.
+**Narrow terminals.** Below 80 columns the board shows one pane at a time and
+`tab` swaps between them; everything else works the same.
 
-**Agent → role mapping** lists every subagent definition it can find — from
-`~/.pi/agent/agents/`, `<cwd>/.pi/agents/`, and the `agents/` folder inside
-installed pi packages — plus any agent already named in your config. Map each to
-a role, unmap to fall back to `@task`, or add a name by hand.
-
-**Advisor** sub-menu covers the master switch, the advisor model, mode, review
-interval, minimum severity and note cap. See [The advisor](#the-advisor).
-
-The TUI is built on `ctx.ui.select` / `input` / `confirm`, so it works in the
-interactive TUI and in RPC mode alike.
+**Non-interactive modes.** In RPC, JSON and print mode there is no terminal to
+draw on, so `/roles` falls back to a plain menu tree built on
+`ctx.ui.select` / `input` / `confirm` with the same capabilities.
 
 ## Commands
 
@@ -467,7 +487,8 @@ Plus `pi.registerCommand`, `pi.setModel` / `pi.setThinkingLevel`,
 | `config.ts` | file locations, merging, atomic writes |
 | `resolve.ts` | role → model resolution: aliases, fallbacks, matching, health |
 | `agents.ts` | subagent definition discovery across user/project/package dirs |
-| `ui.ts` | the `/roles` menu tree |
+| `board.ts` | the two-pane `/roles` board (pi-tui only, so it is testable headlessly) |
+| `ui.ts` | menu-tree fallback and the dialogs the board hands off to |
 | `advisor.ts` | advisor prompt, JSON parsing, verdict rendering |
 | `index.ts` | hooks, commands, and the wiring between them |
 
@@ -518,13 +539,15 @@ resolvable model, `everyTurns` has not elapsed, or its verdicts are below
 ```bash
 git clone https://github.com/thucpru/pi-model-roles
 cd pi-model-roles
+npm install       # pulls @earendil-works/pi-tui, which the board tests import
 npm test          # node --test --experimental-strip-types test/*.test.ts
 pi -e .           # run a pi session with this checkout loaded
 ```
 
-Requires Node 22+ for native TypeScript stripping in tests. `resolve.ts` and
-`types.ts` are deliberately free of pi imports so the resolution logic is
-testable without a pi runtime.
+Requires Node 22+ for native TypeScript stripping in tests. `types.ts` and
+`resolve.ts` import nothing from pi, and `board.ts` imports only `pi-tui`, so
+resolution and the whole board — keys, mutations, and the invariant that no
+rendered line exceeds the terminal width — are tested without a pi runtime.
 
 There is no build step — pi loads TypeScript through
 [jiti](https://github.com/unjs/jiti).
