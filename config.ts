@@ -6,7 +6,8 @@
  * touching your global one.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { BUILT_IN_ROLES, type RoleConfig, type RolesFile, emptyConfig } from "./types.ts";
@@ -76,7 +77,22 @@ export function saveConfig(path: string, config: RolesFile): void {
 	};
 
 	mkdirSync(dirname(path), { recursive: true });
-	const tmp = `${path}.tmp`;
-	writeFileSync(tmp, `${JSON.stringify(out, null, 2)}\n`, "utf-8");
-	renameSync(tmp, path);
+
+	// A project save lands inside the checkout, so the temp path must not be
+	// guessable and must not be followed: a repo can commit a symlink at a
+	// fixed `<file>.tmp` and have the default create-truncate write land on
+	// whatever it points at. `wx` fails with EEXIST instead of following one.
+	const tmp = `${path}.${randomUUID()}.tmp`;
+	try {
+		writeFileSync(tmp, `${JSON.stringify(out, null, 2)}\n`, { encoding: "utf-8", flag: "wx" });
+		// rename() acts on the destination link itself rather than its target,
+		// so a symlinked `path` is replaced here rather than written through.
+		renameSync(tmp, path);
+	} catch (error) {
+		// Cleanup must never mask why the save actually failed.
+		try {
+			rmSync(tmp, { force: true });
+		} catch {}
+		throw error;
+	}
 }
